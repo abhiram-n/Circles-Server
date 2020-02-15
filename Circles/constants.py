@@ -57,7 +57,7 @@ FRIEND_REQUEST_ACCEPTED_BODY = "You've been added to each other's Circles"
 FRIEND_REQUEST_DECLINED_BODY = "You'll remain outside each other's Circles"
 
 # notification constants
-FIREBASE_CHANNEL = "circlesWay" # todo
+FIREBASE_CHANNEL = "circlesWay"
 
 CHAT_NOTIFICATION_TITLE = "New message from {}"
 CHAT_NOTIFICATION_BODY = "You have new messages in your encrypted chat"

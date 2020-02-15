@@ -55,7 +55,7 @@ class User(db.Model):
             abort(constants.STATUS_GONE)
             return None  # valid token, but expired
         except BadSignature:
-            print("ERROR: The token is invalid.")
+            print("ERROR: The token is invalid")
             return None  # invalid token
         user = User.query.get(data['id'])
         return user
@@ -94,6 +94,7 @@ class AccessRequest(db.Model):
     toUserId = db.Column(db.Integer(), db.ForeignKey('user.id'))
     cardId = db.Column(db.Integer(), unique=False)
     amount = db.Column(db.Integer(), unique=False)
+    shortDesc = db.Column(db.String(), unique=False)
     status = db.Column(db.Integer(), unique=False)
     createdOn = db.Column(db.DateTime(timezone=True))
     resolvedOn = db.Column(db.DateTime(timezone=True))

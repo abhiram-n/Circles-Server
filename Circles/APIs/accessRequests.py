@@ -7,7 +7,7 @@ from firebase_admin import messaging
 from sqlalchemy.orm import load_only
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import exc,literal, desc
-import datetime, json, pytz, random, requests, string
+import datetime, json, pytz, random, requests, string, os
 from Circles import constants, utils
 from threading import Thread
 from twilio.rest import Client
@@ -36,7 +36,7 @@ def createNewAccessRequest():
     amount = request.json["amount"]
     to = request.json["to"]
     cardId = int(request.json["cardId"])
-
+    shortDesc = constants.DATETIME_NOT_AVAILABLE if "shortDesc" not in request.json else request.json["shortDesc"]
     db.create_all()
     recipient = User.query.options(load_only('fcmToken')).get(to)
     if not recipient:
@@ -45,7 +45,7 @@ def createNewAccessRequest():
         return "", constants.STATUS_BAD_REQUEST
 
     timeNow = datetime.datetime.now(tz=pytz.timezone(constants.TIMEZONE_KOLKATA))
-    accessRequest = AccessRequest(cardId=cardId, amount=amount, status=constants.ACCESS_REQUEST_UNACCEPTED, createdOn=timeNow)
+    accessRequest = AccessRequest(cardId=cardId, amount=amount, shortDesc=shortDesc, status=constants.ACCESS_REQUEST_UNACCEPTED, createdOn=timeNow)
     g.user.aRequests_sent.append(accessRequest)
     recipient.aRequests_rec.append(accessRequest)
     db.session.add(accessRequest)
@@ -67,8 +67,8 @@ def createNewAccessRequest():
 
 def createNotificationForAccessRequest(name, cardId):
     cardName = getCardNameFromId(cardId)
-    return messaging.Notification(constants.ACCESS_REQUEST_NOTIFICATION_TITLE.format(name),
-                                  constants.ACCESS_REQUEST_NOTIFICATION_BODY.format(name, cardName))
+    return messaging.Notification(constants.ACCESS_REQUEST_NOTIFICATION_TITLE.format(name), \
+                                  constants.ACCESS_REQUEST_NOTIFICATION_BODY.format(name, cardName), os.environ["LOGO_URL"])
 
 
 @apiBlueprint.route("/accessRequests", methods=["GET"])
@@ -106,6 +106,7 @@ def getAccessRequestInfo():
         "cardId": accessRequest.cardId,
         "cardName": getCardNameFromId(accessRequest.cardId),
         "status": accessRequest.status,
+        "shortDesc": accessRequest.shortDesc,
         "createdOn": utils.getDateTimeAsString(accessRequest.createdOn)
     } 
 
@@ -162,7 +163,7 @@ def respondToAccessRequest():
 
 def createNotificationForAcceptedAccessRequest(recipient):
     return messaging.Notification(constants.ACCESS_REQUEST_ACCEPTED_TITLE.format(recipient), \
-                                constants.ACCESS_REQUEST_ACCEPTED_BODY)
+                                constants.ACCESS_REQUEST_ACCEPTED_BODY, os.environ["LOGO_URL"])
 
 
 def createNotificationForDeclinedAccessRequest(recipient):
@@ -190,7 +191,7 @@ def getAccessRequestsReceived():
         toReturn['requests'].append({"requestId": accessRequest.id, "cardId": accessRequest.cardId, "cardName": cardName, \
             "id": accessRequest.fromUserId, "name": senderName, "createdOn": utils.getDateTimeAsString(accessRequest.createdOn), \
             "resolvedOn": utils.getDateTimeAsString(accessRequest.resolvedOn), "status": accessRequest.status, \
-            "profileImgUrl": accessRequest.sender.profileImgUrl, "amount": accessRequest.amount})
+            "shortDesc": accessRequest.shortDesc, "profileImgUrl": accessRequest.sender.profileImgUrl, "amount": accessRequest.amount})
     db.session.close()
     return jsonify(toReturn), constants.STATUS_OK
 
@@ -215,7 +216,7 @@ def getAccessRequestsSent():
         toReturn['requests'].append({"requestId": accessRequest.id, "cardId": accessRequest.cardId, "cardName": cardName, \
             "id": accessRequest.toUserId, "name": recipientName, "profileImgUrl": accessRequest.recipient.profileImgUrl, \
             "createdOn": utils.getDateTimeAsString(accessRequest.createdOn), "resolvedOn": utils.getDateTimeAsString(accessRequest.resolvedOn), \
-            "status": accessRequest.status, "amount": accessRequest.amount})
+            "shortDesc": accessRequest.shortDesc, "status": accessRequest.status, "amount": accessRequest.amount})
     db.session.close()
     return jsonify(toReturn), constants.STATUS_OK
 

@@ -19,7 +19,7 @@ def sendSMS(smsBody, phoneNumber):
         account_sid = os.environ['TWILIO_ACCOUNT_SID']
         auth_token = os.environ['TWILIO_AUTH_TOKEN']
         client = Client(account_sid, auth_token)
-        message = client.messages.create(body=smsBody, from_='+15674557669', to=phoneNumber) # todo
+        message = client.messages.create(body=smsBody, from_=os.environ['TWILIO_PHONE_NUMBER'], to=phoneNumber) # todo
     except Exception as err:
         print('Failed to send sms: ' + str(err))
         return False

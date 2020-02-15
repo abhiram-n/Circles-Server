@@ -17,7 +17,7 @@ def getAllCards():
 @apiBlueprint.route("/card/filter", methods=['GET'])
 def getCards():
     if "type" not in request.args:
-        print("Type is a required paramter for this operation.")
+        print("ERROR: Type is a required paramter for this operation.")
         return "", constants.STATUS_BAD_REQUEST
 
     objectType = request.args["type"]

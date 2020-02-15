@@ -7,7 +7,7 @@ from firebase_admin import messaging
 from sqlalchemy.orm import load_only
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import exc,literal
-import datetime, json, pytz, random, requests, string
+import datetime, json, pytz, random, requests, string, os
 from Circles import constants, utils
 from threading import Thread
 from twilio.rest import Client
@@ -49,8 +49,8 @@ def createNewPost():
 
 
 def createNotificationForNewPost(name):
-    return messaging.Notification(constants.POST_NOTIFICATION_TITLE.format(name), 
-                                  constants.POST_NOTIFICATION_BODY.format(name))
+    return messaging.Notification(constants.POST_NOTIFICATION_TITLE.format(name), \
+                                  constants.POST_NOTIFICATION_BODY.format(name), os.environ["LOGO_URL"])
 
 
 def sendPostNotificationsToFriends(fmcTokens, creatorName, postId):
@@ -62,7 +62,6 @@ def sendPostNotificationsToFriends(fmcTokens, creatorName, postId):
     
     if fmcTokens: 
         for fcmToken in fmcTokens:
-            print('The fcmToken: ' + fcmToken)
             utils.sendDeviceNotification(fcmToken, notification, data)
     
     return True
@@ -85,11 +84,11 @@ def getPosts():
         if g.user.friends:
             for friendRow in g.user.friends: 
                 friend = User.query.get(friendRow.friendId)
-                if friend and friend.posts:
-                    allPosts.append(friend.posts)
+                if friend and friend.posts and len(friend.posts) > 0:
+                    for post in friend.posts:
+                        allPosts.append(post)
 
         if allPosts != []:
-            print('Post not empty. First: ' + str(allPosts[0].id)) 
             allPosts = sorted(allPosts, key=lambda post: post.createdOn, reverse=True)
             for post in allPosts:
                 toReturn["posts"].append({"id": post.id, "text": post.text, "creatorId": post.creatorId, \

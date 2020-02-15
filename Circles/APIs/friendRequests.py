@@ -7,7 +7,7 @@ from firebase_admin import messaging
 from sqlalchemy.orm import load_only
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import exc,literal, desc
-import datetime, json, pytz, random, requests, string
+import datetime, json, pytz, random, requests, string, os
 from Circles import constants, utils
 from threading import Thread
 from twilio.rest import Client
@@ -71,8 +71,8 @@ def createNewFriendRequest():
 
 
 def createNotificationForNewFriendRequest(sender):
-    return messaging.Notification(constants.FRIEND_REQUEST_NOTIFICATION_TITLE, 
-                                  constants.FRIEND_REQUEST_NOTIFICATION_BODY.format(sender))
+    return messaging.Notification(constants.FRIEND_REQUEST_NOTIFICATION_TITLE, \
+                                  constants.FRIEND_REQUEST_NOTIFICATION_BODY.format(sender), os.environ["LOGO_URL"])
 
 
 @apiBlueprint.route('/friendRequests/cancel', methods=["POST"])
@@ -225,12 +225,12 @@ def respondToFriendRequest():
 
 def createNotificationForAcceptedFriendRequest(recipient):
     return messaging.Notification(constants.FRIEND_REQUEST_ACCEPTED_TITLE.format(recipient), \
-                                constants.FRIEND_REQUEST_ACCEPTED_BODY)
+                                constants.FRIEND_REQUEST_ACCEPTED_BODY, os.environ["LOGO_URL"])
 
 
 def createNotificationForDeclinedFriendRequest(recipient):
     return messaging.Notification(constants.FRIEND_REQUEST_DECLINED_TITLE.format(recipient), \
-                                constants.FRIEND_REQUEST_DECLINED_BODY)
+                                constants.FRIEND_REQUEST_DECLINED_BODY, os.environ["LOGO_URL"])
 
 
 @apiBlueprint.route("/friends/remove", methods=["POST"])

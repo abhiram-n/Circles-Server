@@ -117,7 +117,6 @@ def getUserIdCode():
 
 # TODO: Search tags
 # change circles env in EB (think about random domain vs particular domain)
-# api key handling
 @apiBlueprint.route('/user/search/cardholders', methods=["GET"])
 @auth.login_required
 def searchCardholders():
@@ -143,9 +142,17 @@ def searchCardholders():
     else:
         cardIds = [int(cardId)]
 
+    processedIds = []
+    friendIds = []
+
     # Search first degree friends with card
     for friendRow in g.user.friends:
+        if str(friendRow.friendId) in processedIds:
+            continue
+
+        friendIds.append(friendRow.friendId)
         friend = User.query.get(friendRow.friendId)
+        processedIds.append(str(friendRow.friendId))
         if not friend: 
             print("WARNING: No friend with id: " + str(friendRow.friendId))
             continue
@@ -159,13 +166,19 @@ def searchCardholders():
                     "cardId": oneCardId, "cardName": getCardNameFromId(oneCardId)})
                 toReturn["numFirst"] += 1 
 
-        # Search second degree friends with card
+    # Search second degree friends with card
+    for friendId in friendIds:
+        friend = User.query.get(friendId)
+        if not friend:
+            continue
+
         for secondDegreeFriendRow in friend.friends:
             # Ignore the current user in the list of friends
-            if secondDegreeFriendRow.friendId == g.user.id:
+            if secondDegreeFriendRow.friendId == g.user.id or str(secondDegreeFriendRow.friendId) in processedIds:
                 continue
 
             secondDegreeFriend = User.query.get(secondDegreeFriendRow.friendId)
+            processedIds.append(str(secondDegreeFriendRow.friendId))
             if not secondDegreeFriend: 
                 print("WARNING: No second degree friend with id: " + str(secondDegreeFriendRow.friendId))
                 continue
@@ -198,7 +211,7 @@ def sendChatNotification():
     recipientFcmToken = request.json["to"]
     data["partnerName"] = g.user.name # this user becomes the partner when the notification is read by recipient
     notificationObj = messaging.Notification(constants.CHAT_NOTIFICATION_TITLE.format(str(g.user.name)), \
-                                            constants.CHAT_NOTIFICATION_BODY)
+                                            constants.CHAT_NOTIFICATION_BODY, os.environ["LOGO_URL"])
     utils.sendDeviceNotification(recipientFcmToken, notificationObj, data)
     return "", constants.STATUS_OK
 
