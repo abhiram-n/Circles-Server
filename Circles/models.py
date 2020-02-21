@@ -95,6 +95,7 @@ class AccessRequest(db.Model):
     cardId = db.Column(db.Integer(), unique=False)
     amount = db.Column(db.Integer(), unique=False)
     shortDesc = db.Column(db.String(), unique=False)
+    mutualFriendName = db.Column(db.String(), unique=False)
     status = db.Column(db.Integer(), unique=False)
     createdOn = db.Column(db.DateTime(timezone=True))
     resolvedOn = db.Column(db.DateTime(timezone=True))

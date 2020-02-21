@@ -115,8 +115,6 @@ def getUserIdCode():
 
     return jsonify({"idCode": g.user.idCode, "numFriends": numFriends}), constants.STATUS_OK    
 
-# TODO: Search tags
-# change circles env in EB (think about random domain vs particular domain)
 @apiBlueprint.route('/user/search/cardholders', methods=["GET"])
 @auth.login_required
 def searchCardholders():

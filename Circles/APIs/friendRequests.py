@@ -176,11 +176,13 @@ def respondToFriendRequest():
         limit = request.json["limit"]
         if g.user.friends and len(g.user.friends) >= limit:
             print('ERROR: User: ' + str(g.user.id) + ' has reached the limit of friend requests')
+            db.session.close()
             return "", constants.STATUS_PRECONDITION_FAILED
 
     friendRequest = FriendRequest.query.get(requestId)
     if not friendRequest:
         print("ERROR: No friend request found with id: " + str(requestId))
+        db.session.close()
         return "", constants.STATUS_BAD_REQUEST
 
     if g.user.id != friendRequest.toUserId:

@@ -5,9 +5,6 @@ from Circles.models import db
 from Circles.APIs import apiBlueprint, auth
 
 
-# TODO: check logs to see if any extra/sensitive info is logged
-# TODO: Store all keys AND Hashkey securely in server and remove in Git (__init__ too) 
-# TODO: Place firebase file in a safer directory
 # Firebase configuration
 firebase_app = firebase_admin.initialize_app()
 

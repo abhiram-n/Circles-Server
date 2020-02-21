@@ -37,6 +37,7 @@ def createNewAccessRequest():
     to = request.json["to"]
     cardId = int(request.json["cardId"])
     shortDesc = constants.DATETIME_NOT_AVAILABLE if "shortDesc" not in request.json else request.json["shortDesc"]
+    mutualFriendName = None if "mutualFriendName" not in request.json else request.json["mutualFriendName"]
     db.create_all()
     recipient = User.query.options(load_only('fcmToken')).get(to)
     if not recipient:
@@ -45,14 +46,16 @@ def createNewAccessRequest():
         return "", constants.STATUS_BAD_REQUEST
 
     timeNow = datetime.datetime.now(tz=pytz.timezone(constants.TIMEZONE_KOLKATA))
-    accessRequest = AccessRequest(cardId=cardId, amount=amount, shortDesc=shortDesc, status=constants.ACCESS_REQUEST_UNACCEPTED, createdOn=timeNow)
+    accessRequest = AccessRequest(cardId=cardId, amount=amount, shortDesc=shortDesc, mutualFriendName=mutualFriendName, \
+                                status=constants.ACCESS_REQUEST_UNACCEPTED, createdOn=timeNow)
     g.user.aRequests_sent.append(accessRequest)
     recipient.aRequests_rec.append(accessRequest)
     db.session.add(accessRequest)
     db.session.commit()
 
     # Send notification in parallel
-    notification = createNotificationForAccessRequest(g.user.name, cardId)
+    notification = createNotificationForAccessRequest(g.user.name, cardId) if not mutualFriendName \
+                    else createNotificationForSecondDegreeAccessRequest(g.user.name, mutualFriendName)
     fcmToken = recipient.fcmToken
     data = {
         "requestId": str(accessRequest.id),
@@ -62,6 +65,7 @@ def createNewAccessRequest():
     db.session.close()
     t = Thread(target=utils.sendDeviceNotification, args=(fcmToken, notification, data))
     t.start()
+
     return "", constants.STATUS_OK
 
 
@@ -69,6 +73,11 @@ def createNotificationForAccessRequest(name, cardId):
     cardName = getCardNameFromId(cardId)
     return messaging.Notification(constants.ACCESS_REQUEST_NOTIFICATION_TITLE.format(name), \
                                   constants.ACCESS_REQUEST_NOTIFICATION_BODY.format(name, cardName), os.environ["LOGO_URL"])
+
+
+def createNotificationForSecondDegreeAccessRequest(name, mutualFriendName):
+    return messaging.Notification(constants.ACCESS_REQUEST_NOTIFICATION_TITLE.format(name), \
+                                  constants.ACCESS_REQUEST_NOTIFICATION_BODY_SECOND_DEGREE.format(name, mutualFriendName), os.environ["LOGO_URL"])
 
 
 @apiBlueprint.route("/accessRequests", methods=["GET"])
@@ -85,6 +94,8 @@ def getAccessRequestInfo():
         print("ERROR: No access request found for getAccessRequest with id: " + str(requestId))
         db.session.close()
         return "", constants.STATUS_BAD_REQUEST
+
+    status = getAccessRequestStatus(accessRequest.createdOn, accessRequest.status)
 
     if accessRequest.toUserId != g.user.id and accessRequest.fromUserId != g.user.id:
         print("ERROR: Cannot get access request info when the user is not involved. User: " + str(g.user.id) + " Req: " + str(requestId))
@@ -105,8 +116,9 @@ def getAccessRequestInfo():
         "amount": accessRequest.amount,
         "cardId": accessRequest.cardId,
         "cardName": getCardNameFromId(accessRequest.cardId),
-        "status": accessRequest.status,
+        "status": status,
         "shortDesc": accessRequest.shortDesc,
+        "mutualFriendName": accessRequest.mutualFriendName,
         "createdOn": utils.getDateTimeAsString(accessRequest.createdOn)
     } 
 
@@ -158,17 +170,25 @@ def respondToAccessRequest():
         t = Thread(target=utils.sendDeviceNotification, args=(fcmToken, notification, data))
         t.start()
 
+        try:
+            if (action == constants.ACCESS_REQUEST_ACCEPTED):
+                smsText = "New request created: " + str(requestId)
+                notifyFounders = Thread(target=utils.sendSMSToFounders, args=(smsText,))
+                notifyFounders.start()
+        except Exception as err:
+            print('ERROR: Could not send sms to founders for request: ' + str(requestId) + ' with error: ' + str(err))
+
     return "", constants.STATUS_OK
 
 
 def createNotificationForAcceptedAccessRequest(recipient):
-    return messaging.Notification(constants.ACCESS_REQUEST_ACCEPTED_TITLE.format(recipient), \
-                                constants.ACCESS_REQUEST_ACCEPTED_BODY, os.environ["LOGO_URL"])
+    return messaging.Notification(constants.ACCESS_REQUEST_ACCEPTED_TITLE, \
+                                constants.ACCESS_REQUEST_ACCEPTED_BODY.format(recipient), os.environ["LOGO_URL"])
 
 
 def createNotificationForDeclinedAccessRequest(recipient):
-    return messaging.Notification(constants.ACCESS_REQUEST_DECLINED_TITLE.format(recipient), \
-                                constants.ACCESS_REQUEST_DECLINED_BODY)
+    return messaging.Notification(constants.ACCESS_REQUEST_DECLINED_TITLE, \
+                                constants.ACCESS_REQUEST_DECLINED_BODY.format(recipient), os.environ["LOGO_URL"])
 
 
 @apiBlueprint.route("/accessRequests/received", methods=["GET"])
@@ -190,7 +210,7 @@ def getAccessRequestsReceived():
         cardName = getCardNameFromId(accessRequest.cardId)
         toReturn['requests'].append({"requestId": accessRequest.id, "cardId": accessRequest.cardId, "cardName": cardName, \
             "id": accessRequest.fromUserId, "name": senderName, "createdOn": utils.getDateTimeAsString(accessRequest.createdOn), \
-            "resolvedOn": utils.getDateTimeAsString(accessRequest.resolvedOn), "status": accessRequest.status, \
+            "resolvedOn": utils.getDateTimeAsString(accessRequest.resolvedOn), "status": getAccessRequestStatus(accessRequest.createdOn, accessRequest.status), \
             "shortDesc": accessRequest.shortDesc, "profileImgUrl": accessRequest.sender.profileImgUrl, "amount": accessRequest.amount})
     db.session.close()
     return jsonify(toReturn), constants.STATUS_OK
@@ -216,7 +236,7 @@ def getAccessRequestsSent():
         toReturn['requests'].append({"requestId": accessRequest.id, "cardId": accessRequest.cardId, "cardName": cardName, \
             "id": accessRequest.toUserId, "name": recipientName, "profileImgUrl": accessRequest.recipient.profileImgUrl, \
             "createdOn": utils.getDateTimeAsString(accessRequest.createdOn), "resolvedOn": utils.getDateTimeAsString(accessRequest.resolvedOn), \
-            "shortDesc": accessRequest.shortDesc, "status": accessRequest.status, "amount": accessRequest.amount})
+            "shortDesc": accessRequest.shortDesc, "status": getAccessRequestStatus(accessRequest.createdOn, accessRequest.status), "amount": accessRequest.amount})
     db.session.close()
     return jsonify(toReturn), constants.STATUS_OK
 
@@ -241,3 +261,12 @@ def commitToDB():
         db.session.close()
 
     return committed
+
+
+def getAccessRequestStatus(createdOn, currentStatus):
+    timeNow = datetime.datetime.now(tz=pytz.timezone(constants.TIMEZONE_KOLKATA))
+    difference = timeNow - createdOn
+    if difference.total_seconds() > constants.SECONDS_IN_DAY:
+        return constants.ACCESS_REQUEST_EXPIRED
+    
+    return currentStatus
